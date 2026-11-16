@@ -16,6 +16,31 @@
     </properties>
 
     <dependencies>
+
+        <!-- JUnit 5 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Testcontainers -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>1.20.6</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Testcontainers para banco de dados PostgreSQL -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>1.20.6</version>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -28,19 +53,57 @@
     <build>
         <plugins>
 
-            <!-- JaCoCo: cobertura de testes -->
+            <!-- Testes unitarios: Surefire -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.3</version>
+                <configuration>
+                    <!--suppress UnresolvedMavenProperty -->
+                    <skipTests>${skip.unit.tests}</skipTests>
+                    <!--suppress UnresolvedMavenProperty -->
+                    <argLine>${surefireArgLine}</argLine>
+                </configuration>
+            </plugin>
+
+
+
+            <!-- JaCoCo: cobertura mínima de 85% -->
+
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.14</version>
 
                 <executions>
+                    <!-- Instrumentacao dos testes unitarios -->
                     <execution>
+                        <id>unit-agent</id>
                         <goals>
                             <goal>prepare-agent</goal>
                         </goals>
+                        <configuration>
+                            <destFile>${project.build.directory}/jacoco.exec</destFile>
+                            <append>true</append>
+                            <propertyName>surefireArgLine</propertyName>
+                        </configuration>
                     </execution>
 
+                    <!-- Instrumentacao dos testes de integracao -->
+                    <execution>
+                        <id>integration-agent</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <destFile>${project.build.directory}/jacoco.exec</destFile>
+                            <append>true</append>
+                            <propertyName>failsafeArgLine</propertyName>
+                        </configuration>
+                    </execution>
+
+                    <!-- Relatorio -->
                     <execution>
                         <id>report</id>
                         <phase>verify</phase>
@@ -48,10 +111,68 @@
                             <goal>report</goal>
                         </goals>
                     </execution>
+
+                    <!-- Cobertura minima -->
+                    <execution>
+                        <id>check-coverage</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <dataFile>${project.build.directory}/jacoco.exec</dataFile>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.85</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
+
+            <!-- Testes de integracao -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.5.3</version>
+                <configuration>
+                    <!--suppress UnresolvedMavenProperty -->
+                    <argLine>${failsafeArgLine}</argLine>
+                </configuration>
+
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- OWASP Dependency Check -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>13.0.0</version>
+
+                <configuration>
+                    <failBuildOnCVSS>0.0</failBuildOnCVSS>
+                    <failOnError>true</failOnError>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+
 
 </project>
