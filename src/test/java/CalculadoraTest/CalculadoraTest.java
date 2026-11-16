@@ -12,7 +12,7 @@ public class CalculadoraTest {
 
     @Test
     void testarSoma() {
-        assertEquals(10, calculadora.somar(5, 5));
+        assertEquals(13, calculadora.somar(5, 8));
     }
 
     @Test
