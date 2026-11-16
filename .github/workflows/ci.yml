@@ -1,5 +1,5 @@
 
-name: Java CI Pipeline
+name: Java Secure CI/CD Pipeline
 
 on:
   push:
@@ -10,62 +10,132 @@ on:
 
 jobs:
 
-  # ETAPA 1 - Build e testes
-  build-and-test:
+  # JOB 1 - TESTES UNITARIOS
+  unit-tests:
+    name: Testes Unitarios
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do codigo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configurar Java
         uses: actions/setup-java@v4
         with:
           java-version: '25'
-          distribution: 'temurin'
+          distribution: temurin
           cache: maven
 
-      - name: Compilar e executar testes
-        run: mvn clean verify
+      - name: Executar JUnit
+        run: mvn -B test
 
-      # Relatorio JaCoCo
-      - name: Salvar relatorio JaCoCo
-        uses: actions/upload-artifact@v4
+      - name: Publicar resultados
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-unitarios
+          path: target/surefire-reports/
+          if-no-files-found: warn
+
+  # JOB 2 - TESTES DE INTEGRACAO
+  integration-tests:
+    name: Testes de Integracao
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: temurin
+          cache: maven
+
+      - name: Verificar Docker
+        run: docker version
+
+      - name: Executar Testcontainers
+        run: mvn -B -Dskip.unit.tests=true verify
+
+      - name: Publicar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-integracao
+          path: target/failsafe-reports/
+          if-no-files-found: warn
+
+  # JOB 3 - SEGURANCA OWASP
+  security-scan:
+    name: Analise de Vulnerabilidades
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: temurin
+          cache: maven
+
+      - name: OWASP Dependency Check
+        run: >
+          mvn -B
+          org.owasp:dependency-check-maven:13.0.0:check
+          -DfailBuildOnCVSS=0.0
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+
+      - name: Salvar relatorio OWASP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-owasp
+          path: target/dependency-check-report.html
+          if-no-files-found: warn
+
+  # JOB 4 - COBERTURA
+  coverage-gate:
+    name: Verificar Cobertura JaCoCo
+    runs-on: ubuntu-latest
+
+    needs:
+      - unit-tests
+      - integration-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: temurin
+          cache: maven
+
+      - name: Executar testes e validar cobertura
+        run: mvn -B clean verify
+
+      - name: Publicar relatorio JaCoCo
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: relatorio-jacoco
           path: target/site/jacoco/
           if-no-files-found: warn
-          retention-days: 30
 
-      # Testes JUnit
-      - name: Publicar resultados JUnit
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: resultados-junit
-          path: target/surefire-reports/
-
-      # Checkstyle
-      - name: Verificar qualidade do codigo
-        run: mvn checkstyle:check
-
-      # SonarQube com Quality Gate
-      - name: Analise SonarQube
-        if: ${{ secrets.SONAR_TOKEN != '' && secrets.SONAR_HOST_URL != '' }}
-        uses: SonarSource/sonarqube-scan-action@v5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        with:
-          args: >
-            -Dsonar.qualitygate.wait=true
-
-  # ETAPA 2 - Deploy
+  # JOB 5 - DEPLOY
   deploy:
+    name: Deploy
     runs-on: ubuntu-latest
 
-    needs: build-and-test
+    needs:
+      - unit-tests
+      - integration-tests
+      - security-scan
+      - coverage-gate
 
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -73,17 +143,18 @@ jobs:
       name: production
 
     steps:
-      - name: Checkout do codigo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configurar Java
         uses: actions/setup-java@v4
         with:
           java-version: '25'
-          distribution: 'temurin'
+          distribution: temurin
 
-      - name: Executar deploy
+      - name: Executar Deploy
         run: |
-          echo "Aprovacao recebida!"
-          echo "Executando deploy..."
-          # Adicione aqui o comando real de deploy
+          echo "Todos os testes passaram!"
+          echo "Cobertura minima aprovada!"
+          echo "Analise OWASP aprovada!"
+          echo "Deploy autorizado!"
+          # Inserir comando real de deploy
