@@ -1,0 +1,77 @@
+
+name: Java CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  # ETAPA 1 - Build e testes
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar codigo do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Compilar e executar testes
+        run: mvn clean verify
+
+      # ETAPA 2 - Relatorio JaCoCo
+      - name: Salvar relatorio JaCoCo
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: relatorio-jacoco
+          path: target/site/jacoco/
+          if-no-files-found: warn
+          retention-days: 30
+
+      # ETAPA 3 - Checkstyle
+      - name: Verificar qualidade do codigo
+        run: mvn checkstyle:check
+
+      # ETAPA 4 - SonarQube (opcional)
+      - name: Analise SonarQube
+        if: ${{ secrets.SONAR_TOKEN != '' && secrets.SONAR_HOST_URL != '' }}
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  # ETAPA 5 - Aprovacao e deploy
+  deploy:
+    runs-on: ubuntu-latest
+
+    needs: build-and-test
+
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    environment:
+      name: production
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Executar deploy
+        run: |
+          echo "Aprovacao recebida!"
+          echo "Executando deploy..."
+          # Coloque aqui o comando real de implantacao
