@@ -1,0 +1,40 @@
+pipeline {
+    agent any  # Executa em qualquer agente disponível
+    stages {
+        // Etapa de construção
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'  # Comando Maven
+            }
+        }
+
+        // Etapa de testes
+        stage('Test') {
+            steps {
+                sh 'mvn test'  # Executa testes
+                junit 'target/surefire-reports/**/*.xml'  # Publica relatórios
+            }
+        }
+
+        // Etapa condicional de deploy
+        stage('Deploy to Staging') {
+            when {
+                branch 'main'  # Só executa no branch main
+            }
+            steps {
+                // Build da imagem Docker
+                sh 'docker build -t myapp:${GIT_COMMIT} .'
+                // Deploy no Kubernetes
+                sh 'kubectl apply -f k8s/deployment.yaml'
+            }
+        }
+    }
+
+    // Ações pós-build
+    post {
+        failure {
+            // Notificação no Slack em caso de falha
+            slackSend channel: '#alerts', message: "Build Failed: ${env.JOB_NAME}"
+        }
+    }
+}
